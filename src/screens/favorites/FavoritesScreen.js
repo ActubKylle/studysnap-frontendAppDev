@@ -1,4 +1,3 @@
-// File: src/screens/favorites/FavoritesScreen.js
 import React, { useState, useCallback, useContext, useEffect } from 'react';
 import { 
   View, 
@@ -20,8 +19,6 @@ import { ThemeContext } from '../../contexts/ThemeContext';
 import FolderCard from '../../components/folder/Foldercard';
 import * as folderApi from '../../services/api/folders';
 
-// Simplified FavoritesScreen that only shows favorite folders
-// since the /images/favorites endpoint is not available in your API
 const FavoritesScreen = () => {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);

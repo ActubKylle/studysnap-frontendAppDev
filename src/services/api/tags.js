@@ -1,4 +1,3 @@
-// src/services/api/tags.js
 import apiClient from './client';
 
 export const getTags = async () => {

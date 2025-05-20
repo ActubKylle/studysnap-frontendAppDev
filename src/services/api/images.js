@@ -1,4 +1,3 @@
-// File: src/services/api/images.js
 import apiClient from '../api/client';
 import { getFullImagePath, createImageFormData } from '../api/client';
 
@@ -255,23 +254,16 @@ export const getFavoriteImages = async (options = {}, sort = 'date_desc', limit 
  */
 export const getTrashedImages = async () => {
   try {
-    const response = await apiClient.get('images/trashed');
-    
-    // Process image paths in the response
-    if (response.data && response.data.data) {
-      response.data.data = response.data.data.map(image => ({
-        ...image,
-        _originalPath: image.path,
-        path: getFullImagePath(image.path)
-      }));
-    }
-    
+    console.log('Fetching trashed images');
+    const response = await apiClient.get('trash/images');
+    console.log(`Trashed images fetched: ${response.data.data?.length || 0} items`);
     return response;
   } catch (error) {
     console.error('Error fetching trashed images:', error);
     throw error;
   }
 };
+
 
 /**
  * Restore a trashed image
@@ -280,15 +272,9 @@ export const getTrashedImages = async () => {
  */
 export const restoreImage = async (imageId) => {
   try {
+    console.log(`Restoring image ${imageId} from trash`);
     const response = await apiClient.post(`images/${imageId}/restore`);
-    
-    // Process image path in the response
-    // Handle nested data structure
-    if (response.data && response.data.data) {
-      response.data.data._originalPath = response.data.data.path;
-      response.data.data.path = getFullImagePath(response.data.data.path);
-    }
-    
+    console.log('Image restored successfully');
     return response;
   } catch (error) {
     console.error('Error restoring image:', error);
@@ -304,6 +290,16 @@ export const restoreImage = async (imageId) => {
 export const permanentlyDeleteImage = async (imageId) => {
   try {
     return await apiClient.delete(`images/${imageId}/force`);
+  } catch (error) {
+    console.error('Error permanently deleting image:', error);
+    throw error;
+  }
+};
+
+export const forceDeleteImage = async (imageId) => {
+  try {
+    console.log(`Permanently deleting image ${imageId}`);
+    return await apiClient.delete(`trash/images/${imageId}`);
   } catch (error) {
     console.error('Error permanently deleting image:', error);
     throw error;

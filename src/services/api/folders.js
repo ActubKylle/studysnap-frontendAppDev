@@ -101,14 +101,27 @@ export const getFolder = async (folderId) => {
  * @param {object} data - Folder data
  * @returns {Promise} API response
  */
-export const createFolder = async (data) => {
+// In your src/services/api/folders.js file
+export const createFolder = async (folderData) => {
   try {
-    console.log('Creating new folder with data:', JSON.stringify(data));
-    const response = await apiClient.post('folders', data);
-    console.log('Folder created successfully, ID:', response.data?.id);
+    console.log('Creating new folder with data:', folderData);
+    const response = await apiClient.post('folders', folderData);
+    
+    // Log the response structure to debug
+    console.log('Folder creation response:', response.data);
+    
+    // Check if we have the folder ID
+    let folderId = null;
+    if (response.data && response.data.data && response.data.data.id) {
+      folderId = response.data.data.id;
+    } else if (response.data && response.data.id) {
+      folderId = response.data.id;
+    }
+    
+    console.log('Folder created successfully, ID:', folderId);
     return response;
   } catch (error) {
-    console.error('Error creating folder:', error);
+    console.error('Failed to create folder:', error);
     throw error;
   }
 };
@@ -197,7 +210,17 @@ export const getFavoriteFolders = async () => {
     throw error;
   }
 };
-
+export const emptyTrash = async () => {
+  try {
+    console.log('Emptying trash');
+    const response = await apiClient.delete('trash/empty');
+    console.log('Trash emptied successfully');
+    return response;
+  } catch (error) {
+    console.error('Error emptying trash:', error);
+    throw error;
+  }
+};
 /**
  * Get all trashed folders
  * @returns {Promise} API response
@@ -205,7 +228,7 @@ export const getFavoriteFolders = async () => {
 export const getTrashedFolders = async () => {
   try {
     console.log('Fetching trashed folders');
-    const response = await apiClient.get('folders/trashed');
+    const response = await apiClient.get('trash/folders');
     console.log(`Trashed folders fetched: ${response.data.data?.length || 0} items`);
     return response;
   } catch (error) {
@@ -239,7 +262,7 @@ export const restoreFolder = async (folderId) => {
 export const permanentlyDeleteFolder = async (folderId) => {
   try {
     console.log(`Permanently deleting folder ${folderId}`);
-    return await apiClient.delete(`folders/${folderId}/force`);
+    return await apiClient.delete(`trash/folders/${folderId}`);
   } catch (error) {
     console.error('Error permanently deleting folder:', error);
     throw error;

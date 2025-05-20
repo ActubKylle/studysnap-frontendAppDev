@@ -1,31 +1,19 @@
-// File: src/components/debug/ImageInspector.js
 import React, { useState } from 'react';
 import { View, Text, StyleSheet, Image, TouchableOpacity, ActivityIndicator } from 'react-native';
 import { getFullImagePath } from '../services/api/client';
 
-/**
- * A debug component to help diagnose image loading issues
- * Add this to any screen where images aren't loading to see what's happening
- * 
- * Usage:
- * import ImageInspector from '../../components/debug/ImageInspector';
- * ...
- * <ImageInspector imagePath={image.path} originalPath={image._originalPath} />
- */
+
 const ImageInspector = ({ imagePath, originalPath, title = 'Image Inspector' }) => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
   const [showDetails, setShowDetails] = useState(false);
 
-  // Get the full URL if not already a full URL
   const fullUrl = getFullImagePath(imagePath);
   
-  // Handle image load complete
   const handleLoadEnd = () => {
     setLoading(false);
   };
   
-  // Handle image load error
   const handleError = (error) => {
     console.error('Image inspector error:', error.nativeEvent.error);
     setError(true);

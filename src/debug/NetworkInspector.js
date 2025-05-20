@@ -1,4 +1,3 @@
-// File: src/components/debug/NetworkInspector.js
 import React, { useState, useEffect } from 'react';
 import { 
   View, 
@@ -13,14 +12,7 @@ import { BASE_URL } from '../services/api/client';
 
 import * as Network from 'expo-network';
 
-/**
- * A component to help debug network connectivity issues
- * 
- * Usage:
- * import NetworkInspector from '../../components/debug/NetworkInspector';
- * ...
- * <NetworkInspector apiUrl={BASE_URL} />
- */
+
 const NetworkInspector = ({ apiUrl = BASE_URL }) => {
   const [networkInfo, setNetworkInfo] = useState(null);
   const [loading, setLoading] = useState(true);

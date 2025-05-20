@@ -4,7 +4,7 @@ import * as SecureStore from 'expo-secure-store';
 import { Platform } from 'react-native';
 
 // API Base URL - Use your server address
-const API_BASE_URL = '10.0.254.15:8000'; // Your current IP address
+const API_BASE_URL = '10.0.254.6:8000'; // Your current IP address
 const API_PROTOCOL = 'http'; // or 'https' for production
 
 // Export the full base URL for use elsewhere

@@ -1,4 +1,3 @@
-// File: src/screens/folder/FolderDetailScreen.js
 import React, { useState, useEffect, useContext } from 'react';
 import {
   View,
@@ -295,6 +294,109 @@ const FolderDetailScreen = () => {
   const handleAddImage = () => {
     navigation.navigate('Camera', { folderId });
   };
+const handleImageAction = async (action, imageId, data) => {
+  console.log(`Performing action ${action} on image ${imageId}`);
+  
+  switch (action) {
+    case 'delete':
+      try {
+        setLoading(true);
+        await imageApi.deleteImage(imageId);
+        
+        // Update local state by filtering out the deleted image
+        setImages(prevImages => prevImages.filter(img => img.id !== imageId));
+        
+        Alert.alert('Success', 'Image moved to trash');
+      } catch (error) {
+        console.error('Error deleting image:', error);
+        Alert.alert('Error', 'Failed to delete image. Please try again.');
+      } finally {
+        setLoading(false);
+      }
+      break;
+      
+    case 'edit':
+      try {
+        if (!data || !data.name) {
+          Alert.alert('Error', 'Invalid image data provided');
+          return;
+        }
+        
+        setLoading(true);
+        const response = await imageApi.updateImage(imageId, data);
+        
+        // Extract updated image data from response
+        let updatedImage = null;
+        if (response.data && response.data.data) {
+          updatedImage = response.data.data;
+        } else if (response.data) {
+          updatedImage = response.data;
+        }
+        
+        if (updatedImage) {
+          // Update image in state
+          setImages(prevImages => 
+            prevImages.map(img => 
+              img.id === imageId ? { ...img, ...updatedImage } : img
+            )
+          );
+          
+          Alert.alert('Success', 'Image updated successfully');
+        } else {
+          // If we couldn't extract the updated image data, refetch all images
+          handleRefresh();
+        }
+      } catch (error) {
+        console.error('Error updating image:', error);
+        Alert.alert('Error', 'Failed to update image. Please try again.');
+      } finally {
+        setLoading(false);
+      }
+      break;
+      
+    case 'toggleFavorite':
+      try {
+        setLoading(true);
+        const response = await imageApi.toggleFavoriteImage(imageId);
+        
+        // Extract updated image data from response
+        let updatedImage = null;
+        if (response.data && response.data.data) {
+          updatedImage = response.data.data;
+        } else if (response.data) {
+          updatedImage = response.data;
+        }
+        
+        if (updatedImage) {
+          // Update image in state
+          setImages(prevImages => 
+            prevImages.map(img => 
+              img.id === imageId ? { 
+                ...img, 
+                is_favorite: updatedImage.is_favorite ?? !img.is_favorite 
+              } : img
+            )
+          );
+        } else {
+          // If we couldn't extract the updated image data, toggle locally
+          setImages(prevImages => 
+            prevImages.map(img => 
+              img.id === imageId ? { ...img, is_favorite: !img.is_favorite } : img
+            )
+          );
+        }
+      } catch (error) {
+        console.error('Error toggling favorite status:', error);
+        Alert.alert('Error', 'Failed to update favorite status. Please try again.');
+      } finally {
+        setLoading(false);
+      }
+      break;
+      
+    default:
+      console.warn(`Unknown image action: ${action}`);
+  }
+};
 
   // Handle image press
   const handleImagePress = (imageId) => {
@@ -308,20 +410,20 @@ const FolderDetailScreen = () => {
   };
 
   // Render item for FlatList
-  const renderItem = ({ item }) => {
-    if (!item) {
-      console.warn('Undefined item passed to renderItem');
-      return null;
-    }
-    
-    return (
-      <ImageCard
-        image={item}
-        onPress={() => handleImagePress(item.id)}
-      />
-    );
-  };
-
+const renderItem = ({ item }) => {
+  if (!item) {
+    console.warn('Undefined item passed to renderItem');
+    return null;
+  }
+  
+  return (
+    <ImageCard
+      image={item}
+      onPress={() => handleImagePress(item.id)}
+      onImageAction={handleImageAction}
+    />
+  );
+};
   // Key extractor for FlatList
   const keyExtractor = (item) => {
     if (!item || !item.id) {

@@ -1,5 +1,4 @@
-// File: src/screens/folder/FolderScreen.js
-import React, { useState, useCallback, useContext, memo } from 'react';
+import React, { useState, useCallback, useContext, memo, useEffect } from 'react';
 import { 
   View, 
   Text, 
@@ -29,6 +28,15 @@ const sortOptions = [
   { label: 'Date (Oldest)', value: 'date_asc' },
 ];
 
+// Debounce utility function
+function debounce(func, wait) {
+  let timeout;
+  return function(...args) {
+    clearTimeout(timeout);
+    timeout = setTimeout(() => func.apply(this, args), wait);
+  };
+}
+
 // Memoized FolderCard component to prevent unnecessary re-renders
 const MemoizedFolderCard = memo(FolderCard);
 
@@ -56,7 +64,7 @@ const SortMenu = memo(({ visible, onDismiss, sortBy, handleSortChange, theme }) 
   </Menu>
 ));
 
-// Extracted dialog component to improve performance
+// Optimized dialog component to improve performance
 const CreateFolderDialog = memo(({ 
   visible, 
   onDismiss, 
@@ -68,49 +76,101 @@ const CreateFolderDialog = memo(({
   error,
   theme,
   colorOptions 
-}) => (
-  <Dialog
-    visible={visible}
-    onDismiss={onDismiss}
-    style={{ backgroundColor: theme.colors.card, borderRadius: 20 }}
-  >
-    <Dialog.Title style={{ color: theme.colors.text, textAlign: 'center' }}>Create New Folder</Dialog.Title>
-    <Dialog.Content>
-      {error ? <Text style={styles.errorText}>{error}</Text> : null}
-      <TextInput
-        label="Folder Name"
-        value={newFolderName}
-        onChangeText={setNewFolderName}
-        mode="outlined"
-        style={styles.input}
-        theme={{ colors: { primary: theme.colors.primary } }}
-      />
-      
-      <Text style={[styles.colorLabel, { color: theme.colors.text }]}>Select Color</Text>
-      <View style={styles.colorContainer}>
-        {colorOptions.map((color) => (
-          <TouchableOpacity
-            key={color}
-            style={[
-              styles.colorOption,
-              { backgroundColor: color },
-              newFolderColor === color && styles.selectedColor,
-            ]}
-            onPress={() => setNewFolderColor(color)}
-          />
-        ))}
-      </View>
-    </Dialog.Content>
-    <Dialog.Actions>
-      <Button onPress={onDismiss} textColor={theme.colors.text}>
-        Cancel
-      </Button>
-      <Button onPress={handleCreateFolder} textColor={theme.colors.primary} mode="contained" buttonColor={theme.colors.primary + '20'}>
-        Create
-      </Button>
-    </Dialog.Actions>
-  </Dialog>
-));
+}) => {
+  // Use local state for input to prevent parent re-renders during typing
+  const [localFolderName, setLocalFolderName] = useState(newFolderName);
+  const [localError, setLocalError] = useState('');
+  
+  // Sync local state with parent state when dialog opens
+  useEffect(() => {
+    if (visible) {
+      setLocalFolderName(newFolderName);
+      setLocalError('');
+    }
+  }, [visible, newFolderName]);
+  
+  // Only update parent state when dialog is dismissed
+  const handleDismiss = () => {
+    setNewFolderName(localFolderName);
+    onDismiss();
+  };
+  
+  // Validate in the dialog before calling parent handler
+  const handleCreate = () => {
+    if (!localFolderName.trim()) {
+      setLocalError('Please enter a folder name');
+      return; // Don't proceed if validation fails
+    }
+    
+    // Clear any previous errors
+    setLocalError('');
+    
+    // Pass the local state directly to the create function
+    handleCreateFolder(localFolderName, newFolderColor);
+  };
+  
+  return (
+    <Dialog
+      visible={visible}
+      onDismiss={handleDismiss}
+      style={{ backgroundColor: theme.colors.card, borderRadius: 20 }}
+    >
+      <Dialog.Title style={{ color: theme.colors.text, textAlign: 'center' }}>Create New Folder</Dialog.Title>
+      <Dialog.Content>
+        {error || localError ? <Text style={styles.errorText}>{localError || error}</Text> : null}
+        <TextInput
+          label="Folder Name"
+          value={localFolderName}
+          onChangeText={(text) => {
+            setLocalFolderName(text);
+            if (text.trim()) setLocalError(''); // Clear error when user types
+          }}
+          mode="outlined"
+          style={styles.input}
+          theme={{ colors: { primary: theme.colors.primary } }}
+          autoFocus={true}
+          maxLength={50} // Limit length to improve performance
+        />
+        
+        <Text style={[styles.colorLabel, { color: theme.colors.text }]}>Select Color</Text>
+        <View style={styles.colorContainer}>
+          {colorOptions.map((color) => (
+            <TouchableOpacity
+              key={color}
+              style={[
+                styles.colorOption,
+                { backgroundColor: color },
+                newFolderColor === color && styles.selectedColor,
+              ]}
+              onPress={() => setNewFolderColor(color)}
+            />
+          ))}
+        </View>
+      </Dialog.Content>
+      <Dialog.Actions>
+        <Button onPress={handleDismiss} textColor={theme.colors.text}>
+          Cancel
+        </Button>
+        <Button 
+          onPress={handleCreate} 
+          textColor={theme.colors.primary} 
+          mode="contained" 
+          buttonColor={theme.colors.primary + '20'}
+          disabled={!localFolderName.trim()}
+        >
+          Create
+        </Button>
+      </Dialog.Actions>
+    </Dialog>
+  );
+}, (prevProps, nextProps) => {
+  // Custom comparison function to prevent unnecessary re-renders
+  return (
+    prevProps.visible === nextProps.visible &&
+    prevProps.error === nextProps.error &&
+    prevProps.newFolderColor === nextProps.newFolderColor
+  );
+});
 
 // Empty state component
 const EmptyState = memo(({ search, theme }) => (
@@ -141,6 +201,7 @@ const FoldersScreen = () => {
   const [newFolderName, setNewFolderName] = useState('');
   const [newFolderColor, setNewFolderColor] = useState('#FFC107');
   const [error, setError] = useState('');
+  const [isCreatingFolder, setIsCreatingFolder] = useState(false);
 
   const { theme } = useContext(ThemeContext);
   const navigation = useNavigation();
@@ -154,17 +215,12 @@ const FoldersScreen = () => {
     '#FF9800', // Orange
   ];
 
-  // Log available API functions for debugging
-  console.log('Available folder API functions:', Object.keys(folderApi));
-
   const fetchFolders = useCallback(async () => {
     setError('');
     try {
       console.log('Fetching folders with sort:', sortBy);
       // Changed to call the API correctly with the sort parameter
       const response = await folderApi.getFolders({ sort: sortBy });
-      
-      console.log('Folders API response:', response);
       
       // Handle different response structures
       let foldersList = [];
@@ -215,80 +271,261 @@ const FoldersScreen = () => {
     fetchFolders();
   }, [fetchFolders]);
 
+  // Debounced search function
+  const debouncedSearch = useCallback(
+    debounce((query) => {
+      if (query.trim() === '') {
+        setFilteredFolders(folders);
+      } else {
+        const filtered = folders.filter(folder =>
+          folder.name.toLowerCase().includes(query.toLowerCase())
+        );
+        setFilteredFolders(filtered);
+      }
+    }, 300),
+    [folders]
+  );
+  
   const handleSearch = useCallback((query) => {
     setSearch(query);
-    if (query.trim() === '') {
-      setFilteredFolders(folders);
-    } else {
-      const filtered = folders.filter(folder =>
-        folder.name.toLowerCase().includes(query.toLowerCase())
-      );
-      setFilteredFolders(filtered);
-    }
-  }, [folders]);
+    debouncedSearch(query);
+  }, [debouncedSearch]);
 
   const handleSortChange = useCallback((option) => {
     setSortBy(option);
     setSortMenuVisible(false);
   }, []);
 
-  const handleCreateFolder = useCallback(async () => {
-    if (!newFolderName.trim()) {
+  // Optimized folder creation function - UPDATED
+  const handleCreateFolder = async (folderName, folderColor) => {
+    // Use the passed parameters if available, otherwise fall back to state
+    const name = folderName || newFolderName;
+    const color = folderColor || newFolderColor;
+    
+    if (!name || !name.trim()) {
       setError('Please enter a folder name');
       return;
     }
 
+    setIsCreatingFolder(true);
+    
     try {
-      const response = await folderApi.createFolder({
-        name: newFolderName,
-        color: newFolderColor
-      });
+      // Close dialog immediately for better UX
+      setCreateDialogVisible(false);
       
-      console.log('Create folder response:', response);
+      // Show loading indicator
+      setLoading(true);
       
+      const folderData = {
+        name: name.trim(),
+        color: color
+      };
+      
+      const response = await folderApi.createFolder(folderData);
+      
+      // Extract folder properly from the response
       let newFolder = null;
       
+      // Handle nested data structure - FIXED
       if (response.data && response.data.data) {
         newFolder = response.data.data;
+        console.log('Extracted folder from response.data.data:', newFolder);
       } else if (response.data) {
         newFolder = response.data;
+        console.log('Extracted folder from response.data:', newFolder);
       }
       
-      // Make sure the folder has an ID to prevent toString errors
+      // Make sure the folder has an ID - IMPORTANT CHECK
       if (newFolder) {
-        if (!newFolder.id) {
-          console.warn('Created folder without ID, generating temporary ID');
-          newFolder.id = `temp-${Date.now()}`;
+        console.log('New folder extracted:', newFolder);
+        
+        if (!newFolder.id && newFolder.data && newFolder.data.id) {
+          // Handle double-nested data
+          newFolder = newFolder.data;
+          console.log('Found ID in nested data:', newFolder.id);
         }
         
+        if (!newFolder.id) {
+          console.error('Created folder without ID', newFolder);
+          Alert.alert('Warning', 'Folder created but has an invalid ID. Please refresh.');
+          fetchFolders(); // Refresh the folders to get the proper data
+          return;
+        }
+        
+        // Update state with the new folder
+        console.log('Adding new folder to state with ID:', newFolder.id);
         setFolders(prevFolders => [newFolder, ...prevFolders]);
         setFilteredFolders(prevFiltered => [newFolder, ...prevFiltered]);
-        setCreateDialogVisible(false);
+        
+        // Reset folder creation form
         setNewFolderName('');
         setNewFolderColor('#FFC107');
         setError('');
       } else {
-        console.error('Failed to extract new folder data from response');
+        console.error('Failed to extract new folder data from response:', response);
         Alert.alert('Warning', 'Folder may have been created but could not be displayed. Please refresh.');
-        setCreateDialogVisible(false);
         fetchFolders();
       }
     } catch (err) {
       console.error('Error creating folder:', err);
       setError('Failed to create folder');
+      // Reopen dialog to show the error
+      setCreateDialogVisible(true);
+    } finally {
+      setLoading(false);
+      setIsCreatingFolder(false);
     }
-  }, [newFolderName, newFolderColor, fetchFolders]);
+  };
+
+  // Handle opening the create dialog
+  const handleOpenCreateDialog = useCallback(() => {
+    setNewFolderName('');
+    setNewFolderColor('#FFC107');
+    setError('');
+    setCreateDialogVisible(true);
+  }, []);
 
   const handleFolderPress = useCallback((folder) => {
-    if (!folder.id) {
-      console.warn('Attempted to navigate to folder without ID:', folder);
+    console.log('Folder press:', folder);
+    
+    // Safety check for folder ID
+    if (!folder || !folder.id) {
+      console.error('Attempted to navigate to folder without valid ID:', folder);
       Alert.alert('Error', 'Cannot open this folder. It has an invalid ID.');
       return;
     }
     
     // Make sure to use the exact screen name as registered in your navigator
+    console.log('Navigating to folder detail with ID:', folder.id);
     navigation.navigate('FolderDetail', { folderId: folder.id });
   }, [navigation]);
+
+  // Handle folder actions from long press
+  const handleFolderAction = useCallback(async (action, folderId, data) => {
+    console.log(`Performing action ${action} on folder ${folderId}`);
+    
+    switch (action) {
+      case 'delete':
+        try {
+          setLoading(true);
+          await folderApi.deleteFolder(folderId);
+          
+          // Update local state by filtering out the deleted folder
+          setFolders(prevFolders => prevFolders.filter(folder => folder.id !== folderId));
+          setFilteredFolders(prevFiltered => prevFiltered.filter(folder => folder.id !== folderId));
+          
+          Alert.alert('Success', 'Folder moved to trash');
+        } catch (error) {
+          console.error('Error deleting folder:', error);
+          Alert.alert('Error', 'Failed to delete folder. Please try again.');
+        } finally {
+          setLoading(false);
+        }
+        break;
+        
+      case 'edit':
+        try {
+          if (!data || !data.name) {
+            Alert.alert('Error', 'Invalid folder data provided');
+            return;
+          }
+          
+          setLoading(true);
+          const response = await folderApi.updateFolder(folderId, data);
+          
+          // Extract updated folder data from response
+          let updatedFolder = null;
+          if (response.data && response.data.data) {
+            updatedFolder = response.data.data;
+          } else if (response.data) {
+            updatedFolder = response.data;
+          }
+          
+          if (updatedFolder) {
+            // Update folder in state
+            setFolders(prevFolders => 
+              prevFolders.map(folder => 
+                folder.id === folderId ? { ...folder, ...updatedFolder } : folder
+              )
+            );
+            
+            setFilteredFolders(prevFiltered => 
+              prevFiltered.map(folder => 
+                folder.id === folderId ? { ...folder, ...updatedFolder } : folder
+              )
+            );
+            
+            Alert.alert('Success', 'Folder updated successfully');
+          } else {
+            // If we couldn't extract the updated folder data, refetch all folders
+            await fetchFolders();
+          }
+        } catch (error) {
+          console.error('Error updating folder:', error);
+          Alert.alert('Error', 'Failed to update folder. Please try again.');
+        } finally {
+          setLoading(false);
+        }
+        break;
+        
+      case 'toggleFavorite':
+        try {
+          setLoading(true);
+          const response = await folderApi.toggleFavoriteFolder(folderId);
+          
+          // Extract updated folder data from response
+          let updatedFolder = null;
+          if (response.data && response.data.data) {
+            updatedFolder = response.data.data;
+          } else if (response.data) {
+            updatedFolder = response.data;
+          }
+          
+          if (updatedFolder) {
+            // Update folder in state
+            setFolders(prevFolders => 
+              prevFolders.map(folder => 
+                folder.id === folderId ? { 
+                  ...folder, 
+                  is_favorite: updatedFolder.is_favorite ?? !folder.is_favorite 
+                } : folder
+              )
+            );
+            
+            setFilteredFolders(prevFiltered => 
+              prevFiltered.map(folder => 
+                folder.id === folderId ? { 
+                  ...folder, 
+                  is_favorite: updatedFolder.is_favorite ?? !folder.is_favorite 
+                } : folder
+              )
+            );
+          } else {
+            // If we couldn't extract the updated folder data, toggle locally
+            setFolders(prevFolders => 
+              prevFolders.map(folder => 
+                folder.id === folderId ? { ...folder, is_favorite: !folder.is_favorite } : folder
+              )
+            );
+            
+            setFilteredFolders(prevFiltered => 
+              prevFiltered.map(folder => 
+                folder.id === folderId ? { ...folder, is_favorite: !folder.is_favorite } : folder
+              )
+            );
+          }
+        } catch (error) {
+          console.error('Error toggling favorite status:', error);
+          Alert.alert('Error', 'Failed to update favorite status. Please try again.');
+        } finally {
+          setLoading(false);
+        }
+        break;
+        
+      default:
+        console.warn(`Unknown folder action: ${action}`);
+    }
+  }, [fetchFolders]);
 
   const renderItem = useCallback(({ item }) => {
     // Additional safety check for the item
@@ -298,15 +535,19 @@ const FoldersScreen = () => {
     }
     
     return (
-      <MemoizedFolderCard folder={item} onPress={() => handleFolderPress(item)} />
+      <MemoizedFolderCard 
+        folder={item} 
+        onPress={handleFolderPress} 
+        onFolderAction={handleFolderAction} // Pass the folder action handler
+      />
     );
-  }, [handleFolderPress]);
+  }, [handleFolderPress, handleFolderAction]);
 
   const keyExtractor = useCallback(item => {
     // Safety check to prevent toString errors
     if (!item || !item.id) {
       console.warn('Item without ID passed to keyExtractor:', item);
-      return `fallback-${Math.random().toString(36).substr(2, 9)}`;
+      return `fallback-${Math.random().toString(36).substring(2, 9)}`;
     }
     return item.id.toString();
   }, []);
@@ -328,7 +569,7 @@ const FoldersScreen = () => {
       />
       <View style={styles.container}>
         <View style={styles.header}>
-          <Text style={styles.headerTitle}>My Folders</Text>
+          <Text style={[styles.headerTitle, { color: theme.colors.text }]}>My Folders</Text>
           <View style={styles.searchContainer}>
             <Searchbar
               placeholder="Search folders"
@@ -391,8 +632,9 @@ const FoldersScreen = () => {
         <FAB
           style={[styles.fab, { backgroundColor: theme.colors.primary }]}
           icon="plus"
-          onPress={() => setCreateDialogVisible(true)}
+          onPress={handleOpenCreateDialog}
           color="#fff"
+          disabled={isCreatingFolder}
         />
 
         <Portal>

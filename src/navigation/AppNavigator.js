@@ -1,4 +1,3 @@
-// File: src/navigation/AppNavigator.js
 import React, { useContext } from 'react';
 import { createStackNavigator } from '@react-navigation/stack';
 import { AuthContext } from '../contexts/AuthContext';
@@ -11,11 +10,9 @@ import TrashScreen from '../screens/trash/TrashScreen';
 import ImageDetailScreen from '../screens/image/ImageDetailScreen';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
-// Create the stack navigators
 const Stack = createStackNavigator();
 const RootStack = createStackNavigator();
 
-// This is the main navigator that holds authenticated screens
 const MainNavigator = () => {
   return (
     <Stack.Navigator screenOptions={{ headerShown: false }}>
